@@ -1,7 +1,7 @@
 # DIKI - Dictionary for Incivility Detection (German)
 
 Welcome! This is a temporary webspace to provide a blind review of our paper *Developing an Incivility-Dictionary for German Online Discussions – 
-A Semi-Automated Approach Combining Human and Artificial Knowledge* and the associated **DIKI WEB APP**. The repository include both the source code of the analysis and the app.
+A Semi-Automated Approach Combining Human and Artificial Knowledge* and the associated **DIKI WEB APP**. The repository include the source code of both the development of DIKI and the app.
 
 
 **Click [here](https://diki-web-app.herokuapp.com/) to test the app right away!**
