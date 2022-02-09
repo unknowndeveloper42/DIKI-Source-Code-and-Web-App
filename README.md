@@ -13,6 +13,7 @@ The app can be used to identify uncivil words in German-language online discussi
 ### About this Repository
 
 This temporary repository provide the supplemental material (sourcecode, annotation scheme) of the development and evaluation of DIKI. 
+> Folder structure options and naming conventions for software projects
 
  .
     ├── ...
@@ -22,3 +23,4 @@ This temporary repository provide the supplemental material (sourcecode, annotat
     │   └── unit                # Unit tests
     └── ...
 
+>
