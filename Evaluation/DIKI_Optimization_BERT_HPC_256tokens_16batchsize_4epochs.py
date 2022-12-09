@@ -21,8 +21,10 @@ from sklearn.metrics import f1_score
 #import matplotlib.pyplot as plt
 #import seaborn as sns
 
-from sklearn.metrics import f1_score, recall_score, precision_score, confusion_matrix, classification_report
+from sklearn.metrics import f1_score, recall_score, precision_score, confusion_matrix, classification_report, accuracy_score
 
+print("We use Tensorflow version:", tf.__version__)
+print("We use Torch version:", torch.__version__)
 
 
 # Get the GPU device name.
@@ -115,34 +117,9 @@ for sent in input_ids:
     # Store the attention mask for this sentence.
     attention_masks.append(att_mask)
 
-"""#### Training & Validation Split
 
-Divide up our training set to use 90% for training and 10% for validation.
-"""
-
-# Use train_test_split to split our data into train and validation sets for
-# training
-
-# Use 90% for training and 10% for validation.
-train_inputs, validation_inputs, train_labels, validation_labels = train_test_split(input_ids, labels, 
-                                                            random_state=2018, test_size=0.1)
-# Do the same for the masks.
-train_masks, validation_masks, _, _ = train_test_split(attention_masks, labels,
-                                             random_state=2018, test_size=0.1)
 
 """#### Converting to PyTorch Data Types"""
-
-# Convert all inputs and labels into torch tensors, the required datatype for our model.
-train_inputs = torch.tensor(train_inputs)
-validation_inputs = torch.tensor(validation_inputs)
-
-train_labels = torch.tensor(train_labels)
-validation_labels = torch.tensor(validation_labels)
-
-train_masks = torch.tensor(train_masks)
-validation_masks = torch.tensor(validation_masks)
-
-
 # The DataLoader needs to know our batch size for training, so we specify it 
 # here.
 # For fine-tuning BERT on a specific task, the authors recommend a batch size of
@@ -151,15 +128,17 @@ validation_masks = torch.tensor(validation_masks)
 batch_size = 16
 print("batch size:", batch_size)
 
-# Create the DataLoader for our training set.
-train_data = TensorDataset(train_inputs, train_masks, train_labels)
-train_sampler = RandomSampler(train_data)
-train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
+# Convert all inputs and labels into torch tensors, the required datatype for our model.
+#Converting all Training Data without spliting up a validation set
 
-# Create the DataLoader for our validation set.
-validation_data = TensorDataset(validation_inputs, validation_masks, validation_labels)
-validation_sampler = SequentialSampler(validation_data)
-validation_dataloader = DataLoader(validation_data, sampler=validation_sampler, batch_size=batch_size)
+train_all_inputs = torch.tensor(input_ids)
+train_all_labels = torch.tensor(labels)
+train_all_masks = torch.tensor(attention_masks)
+
+train_all_data = TensorDataset(train_all_inputs, train_all_masks, train_all_labels)
+train_all_sampler = RandomSampler(train_all_data)
+train_all_dataloader = DataLoader(train_all_data, sampler=train_all_sampler, batch_size=batch_size)
+
 
 """### Train Classification Model
 
@@ -212,35 +191,29 @@ print("epochs:", epochs)
 
 
 # Total number of training steps is number of batches * number of epochs.
-total_steps = len(train_dataloader) * epochs
+total_steps = len(train_all_dataloader) * epochs
 
 # Create the learning rate scheduler.
 scheduler = get_linear_schedule_with_warmup(optimizer, 
                                             num_warmup_steps = 0, # Default value in run_glue.py
                                             num_training_steps = total_steps)
 
-"""### Training Loop
 
-Below is our training loop. There's a lot going on, but fundamentally for each pass in our loop we have a trianing phase and a validation phase. At each pass we need to:
 
-Training loop:
-- Unpack our data inputs and labels
-- Load data onto the GPU for acceleration
-- Clear out the gradients calculated in the previous pass. 
-    - In pytorch the gradients accumulate by default (useful for things like RNNs) unless you explicitly clear them out.
-- Forward pass (feed input data through the network)
-- Backward pass (backpropagation)
-- Tell the network to update parameters with optimizer.step()
-- Track variables for monitoring progress
 
-Evalution loop:
-- Unpack our data inputs and labels
-- Load data onto the GPU for acceleration
-- Forward pass (feed input data through the network)
-- Compute loss on our validation data and track variables for monitoring progress
+# Below is our training loop.
+# There's a lot going on, but fundamentally for each pass in our loop we have a trianing phase and a validation phase. At each pass we need to:
 
-So please read carefully through the comments to get an understanding of what's happening. If you're unfamiliar with pytorch a quick look at some of their [beginner tutorials](https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html#sphx-glr-beginner-blitz-cifar10-tutorial-py) will help show you that training loops really involve only a few simple steps; the rest is usually just decoration and logging.
-"""
+# Training loop:
+
+# Unpack our data inputs and labels
+# Load data onto the GPU for acceleration
+# Clear out the gradients calculated in the previous pass.
+# In pytorch the gradients accumulate by default (useful for things like RNNs) unless you explicitly clear them out.
+# Forward pass (feed input data through the network)
+# Backward pass (backpropagation)
+# Tell the network to update parameters with optimizer.step()
+# Track variables for monitoring progress
 
 def format_time(elapsed):
     '''
@@ -252,30 +225,10 @@ def format_time(elapsed):
     # Format as hh:mm:ss
     return str(datetime.timedelta(seconds=elapsed_rounded))
 
-"""Define a helper function for calculating accuracy."""
-
-
-
-# Function to calculate the accuracy of our predictions vs labels
-def flat_accuracy(preds, labels):
-    pred_flat = np.argmax(preds, axis=1).flatten()
-    labels_flat = labels.flatten()
-    return np.sum(pred_flat == labels_flat) / len(labels_flat)
-
- # Function to calculate the marcro f1 of our predictions vs labels
-def flat_f1_macro(preds, labels):
-    pred_flat = np.argmax(preds, axis=1).flatten()
-    labels_flat = labels.flatten()
-    return f1_score(labels_flat, pred_flat, average='macro')
-
-"""### Start Training Loop"""
-
-# This training code is based on the `run_glue.py` script here:
-# https://github.com/huggingface/transformers/blob/5bfcd0485ece086ebcbed2d008813037968a9e58/examples/run_glue.py#L128
-
+""" Training Loop"""
 
 # Set the seed value all over the place to make this reproducible.
-seed_val = 42
+seed_val = 4
 
 random.seed(seed_val)
 np.random.seed(seed_val)
@@ -311,7 +264,7 @@ for epoch_i in range(0, epochs):
     model.train()
 
     # For each batch of training data...
-    for step, batch in enumerate(train_dataloader):
+    for step, batch in enumerate(train_all_dataloader):
 
         # Progress update every 40 batches.
         if step % 40 == 0 and not step == 0:
@@ -319,7 +272,7 @@ for epoch_i in range(0, epochs):
             elapsed = format_time(time.time() - t0)
             
             # Report progress.
-            print('  Batch {:>5,}  of  {:>5,}.    Elapsed: {:}.'.format(step, len(train_dataloader), elapsed))
+            print('  Batch {:>5,}  of  {:>5,}.    Elapsed: {:}.'.format(step, len(train_all_dataloader), elapsed))
 
         # Unpack this training batch from our dataloader. 
         #
@@ -374,11 +327,10 @@ for epoch_i in range(0, epochs):
 
         # Update the learning rate.
         scheduler.step()
-
-        
+        #torch.cuda.empty_cache()
 
     # Calculate the average loss over the training data.
-    avg_train_loss = total_loss / len(train_dataloader)            
+    avg_train_loss = total_loss / len(train_all_dataloader)            
     
     # Store the loss value for plotting the learning curve.
     loss_values.append(avg_train_loss)
@@ -386,108 +338,7 @@ for epoch_i in range(0, epochs):
     print("")
     print("  Average training loss: {0:.2f}".format(avg_train_loss))
     print("  Training epoch took: {:}".format(format_time(time.time() - t0)))
-        
-    # ========================================
-    #               Validation
-    # ========================================
-    # After the completion of each training epoch, measure our performance on
-    # our validation set.
 
-    print("")
-    print("Running Validation...")
-
-    t0 = time.time()
-
-    # Put the model in evaluation mode--the dropout layers behave differently
-    # during evaluation.
-    model.eval()
-
-    # Tracking variables 
-    eval_loss, eval_accuracy = 0, 0
-    eval_f1 =0
-    nb_eval_steps, nb_eval_examples = 0, 0
-
-    # Evaluate data for one epoch
-    for batch in validation_dataloader:
-        
-        # Add batch to GPU
-        batch = tuple(t.to(device) for t in batch)
-        
-        # Unpack the inputs from our dataloader
-        b_input_ids, b_input_mask, b_labels = batch
-        
-        # Telling the model not to compute or store gradients, saving memory and
-        # speeding up validation
-        with torch.no_grad():        
-
-            # Forward pass, calculate logit predictions.
-            # This will return the logits rather than the loss because we have
-            # not provided labels.
-            # token_type_ids is the same as the "segment ids", which 
-            # differentiates sentence 1 and 2 in 2-sentence tasks.
-            # The documentation for this `model` function is here: 
-            # https://huggingface.co/transformers/v2.2.0/model_doc/bert.html#transformers.BertForSequenceClassification
-            outputs = model(b_input_ids, 
-                            token_type_ids=None, 
-                            attention_mask=b_input_mask)
-            #print("outputs:", outputs)
-            
-        
-        # Get the "logits" output by the model. The "logits" are the output
-        # values prior to applying an activation function like the softmax.
-        logits = outputs[0]
-        
-
-        # Move logits and labels to CPU
-        logits = logits.detach().cpu().numpy()
-        label_ids = b_labels.to('cpu').numpy()
-        
-        # Calculate the accuracy for this batch of test sentences.
-       
-
-        tmp_eval_accuracy = flat_accuracy(logits, label_ids)
-        tmp_eval_f1 = flat_f1_macro(logits, label_ids)
-
-        
-        # Accumulate the total accuracy/f1
-        eval_accuracy += tmp_eval_accuracy
-        eval_f1 += tmp_eval_f1
-
-
-        # Track the number of batches
-        nb_eval_steps += 1
-
-    # Report the final accuracy/f1 for this validation run.
-    print("  Accuracy: {0:.2f}".format(eval_accuracy/nb_eval_steps))
-    print("  Macro F1: {0:.2f}".format(eval_f1/nb_eval_steps))
-
-    print("  Validation took: {:}".format(format_time(time.time() - t0)))
-
-print("")
-print("Training complete!")
-
-"""Let's take a look at our training loss over all batches:"""
-
-# Commented out IPython magic to ensure Python compatibility.
-# %matplotlib inline
-
-
-# Use plot styling from seaborn.
-#sns.set(style='darkgrid')
-
-# Increase the plot size and font size.
-#sns.set(font_scale=1.5)
-#plt.rcParams["figure.figsize"] = (12,6)
-
-# Plot the learning curve.
-#plt.plot(loss_values, 'b-o')
-
-# Label the plot.
-#plt.title("Training loss")
-#plt.xlabel("Epoch")
-#plt.ylabel("Loss")
-
-#plt.show()
 
 """### Performance On Test Set"""
 
@@ -700,7 +551,11 @@ for i in predictions:
       predictions_list.append(pred_labels_i)
 
 df_test['Predictions_bert'] = predictions_list
-df_test.Predictions_bert.value_counts()
+
+# print("predicted values:", df_test.Predictions_bert.value_counts())
+
 
 print(classification_report(df_test.Sub1_Toxic, df_test.Predictions_bert))
 print(confusion_matrix(df_test.Sub1_Toxic, df_test.Predictions_bert))
+
+# print("accuracy:", accuracy_score(df_test.Sub1_Toxic, df_test.Predictions_bert))
